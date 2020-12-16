@@ -23,6 +23,18 @@ def split_package_name(package_name):
     return name, version
 
 
+def load_metadata(metadata):
+    ret = {}
+    lines = list(map(str.strip, metadata.split('\n')))
+    for line in lines:
+        if line.startswith('License:'):
+            ret['license'] = line.replace('License:', '').strip()
+        elif line.startswith('Home-page:'):
+            ret['homepage'] = line.replace('Home-page:', '').strip()
+
+    return ret
+
+
 def scan_licenses(site_packages_dir):
     current_dir = os.getcwd()
     os.chdir(site_packages_dir)
@@ -31,15 +43,12 @@ def scan_licenses(site_packages_dir):
     packages = []
     for dist_info_dir in dist_info_dirs:
         package_name, version = split_package_name(dist_info_dir)
-        metadata = load_text_from_file(os.path.join(dist_info_dir, 'METADATA'))
+        metadata_content = load_text_from_file(os.path.join(dist_info_dir, 'METADATA'))
+        metadata = load_metadata(metadata_content)
 
-        lines = list(map(str.strip, metadata.split('\n')))
-        license_lines = list(filter(lambda line: line.startswith('License:'), lines))
-        license = 'ABSENT'
-        if len(license_lines) > 0:
-            license = license_lines[0].replace('License:', '').strip()
-
-        packages.append((package_name, version, license))
+        license = metadata.get('license', 'ABSENT')
+        homepage = metadata.get('homepage', 'ABSENT')
+        packages.append([package_name, version, license, homepage])
     os.chdir(current_dir)
 
     return packages
@@ -64,14 +73,13 @@ def load_projects(project_locator_file):
 
 def run(project_locator_file):
     projects = load_projects(project_locator_file)
-    titles = ['Package', 'Version', 'License']
+    titles = ['Package', 'Version', 'License', 'Homepage']
     for project_name, lib_path in projects.items():
         output_lines = []
         output_lines.append(';'.join(titles))
         packages = scan_licenses(lib_path)
         for package_info in packages:
-            name, version, license = package_info
-            output_lines.append(f'{name};{version};{license}')
+            output_lines.append(';'.join(package_info))
 
         save_text_to_file('\n'.join(output_lines), f'{project_name}-licenses.csv')
 
